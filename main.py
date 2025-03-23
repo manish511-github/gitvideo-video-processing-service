@@ -1,11 +1,26 @@
 from fastapi import FastAPI
-import redis
+import redis.asyncio as redis
 from bullmq import Worker
 from dataclasses import dataclass
 from typing import List
+import logging
+import threading
+import asyncio
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
+
+# Initialize async Redis client with password
+redis_client = redis.Redis(
+    host='localhost',
+    port=6379,
+    db=0,
+    password='mysecurepassword',  # Replace with your actual Redis password
+    decode_responses=True
+)
 
 @dataclass
 class Segment:
@@ -89,8 +104,11 @@ class VideoVersionControl:
                  'sourceEndTime': seg.source_end_time, 'globalStartTime': seg.global_start_time}
                 for seg in self.segments]
 
-async def process_change(job):
+async def process_change(job, token):
     try:
+        print('hello')
+        logger.info(f"Token: {token}")
+        logger.info(f"Processing job: {job.data}")
         change_id = job.data['changeId']
         video_id = job.data['videoId']
         operation = job.data['operation']
@@ -109,19 +127,40 @@ async def process_change(job):
             vvc.insert(new_seg, at)
         elif operation == 'update':
             new_seg = Segment(source_video_id, start, end, 0.0)
-            vvc.update(at, end, new_seg)  # 'at' as t1, 'end' as t2
+            vvc.update(at, end, new_seg)
         elif operation == 'merge':
-            other_segments = [Segment(source_video_id, start, end, 0.0)]  # Simplified merge with one segment
+            other_segments = [Segment(source_video_id, start, end, 0.0)]
             vvc.merge(other_segments)
 
-        return {'changeId': change_id, 'timeline': vvc.get_timeline()}
+        result = {'changeId': change_id, 'timeline': vvc.get_timeline()}
+        logger.info(f"Processed result: {result}")
+        return result
     except Exception as e:
+        logger.error(f"Error processing job {job.data}: {str(e)}")
         return {'changeId': change_id, 'error': str(e)}
 
-worker = Worker('video-changes', process_change, {'connection': redis_client})
+# Function to start the BullMQ worker
+def start_worker():
+    # Create a new event loop for the worker thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    # Initialize the BullMQ worker
+    worker = Worker('video-changes', process_change, {'connection': redis_client})
+
+    # Log that the worker has started
+    logger.info("BullMQ worker started")
+
+    # Run the event loop
+    loop.run_forever()
+
+# Start the BullMQ worker in a separate thread
+worker_thread = threading.Thread(target=start_worker)
+worker_thread.daemon = True  # Daemonize thread to stop it when the main program exits
+worker_thread.start()
 
 @app.get("/health")
-def health_check():
+async def health_check():
     return {"status": "healthy"}
 
 if __name__ == "__main__":
