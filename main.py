@@ -7,12 +7,15 @@ import logging
 import threading
 from datetime import datetime
 import asyncio
+from videostream import router  # Import routes from routes.py
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+app.include_router(router)
 
 # Initialize async Redis client with password
 redis_client = redis.Redis(

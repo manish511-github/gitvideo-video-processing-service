@@ -36,3 +36,5 @@ tzdata==2025.1
 uvicorn==0.34.0
 worker==2018.4.1
 yarl==1.18.3
+
+http://localhost:4566/test-bucket/manifests/dynamic_timeline.m3u8

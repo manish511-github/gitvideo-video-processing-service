@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3U8 Video Player</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.0.4/video-js.min.css" rel="stylesheet">
+</head>
+<body>
+    <video id="videoPlayer" class="video-js vjs-default-skin" controls preload="auto" width="640" height="360">
+        <source src="http://localhost:4566/test-bucket/manifests/dynamic_timeline.m3u8" type="application/x-mpegURL">
+    </video>
+    <button id="playButton">Play Video</button>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.0.4/video.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const player = videojs("videoPlayer");
+            const playButton = document.getElementById("playButton");
+            
+            playButton.addEventListener("click", () => {
+                player.muted(true); // Start muted to bypass autoplay restrictions
+                player.play().then(() => {
+                    player.muted(false); // Unmute after playback starts
+                }).catch(error => console.error("Playback failed:", error));
+            });
+        });
+    </script>
+</body>
+</html>
