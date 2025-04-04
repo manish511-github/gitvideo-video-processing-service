@@ -1,30 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M3U8 Video Player</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.0.4/video-js.min.css" rel="stylesheet">
+  <title>Custom Video Playback</title>
 </head>
 <body>
-    <video id="videoPlayer" class="video-js vjs-default-skin" controls preload="auto" width="640" height="360">
-        <source src="http://localhost:4566/test-bucket/manifests/dynamic_timeline.m3u8" type="application/x-mpegURL">
-    </video>
-    <button id="playButton">Play Video</button>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.0.4/video.min.js"></script>
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const player = videojs("videoPlayer");
-            const playButton = document.getElementById("playButton");
-            
-            playButton.addEventListener("click", () => {
-                player.muted(true); // Start muted to bypass autoplay restrictions
-                player.play().then(() => {
-                    player.muted(false); // Unmute after playback starts
-                }).catch(error => console.error("Playback failed:", error));
-            });
-        });
-    </script>
+  <video id="video" controls width="640" height="360"></video>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    const video = document.getElementById('video');
+    const hls = new Hls();
+
+    // ✅ Use your FastAPI endpoint that returns the custom playlist
+    const playlistUrl = "http://localhost:8000/stream/custom-playlist";
+    const seekToTime = 6; // For example, user wants to start at 6 seconds
+
+    if (Hls.isSupported()) {
+      hls.loadSource(playlistUrl);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        video.play();
+        video.oncanplay = function () {
+          video.currentTime = seekToTime; // Seek to exact timestamp
+        };
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = playlistUrl;
+      video.addEventListener('loadedmetadata', function () {
+        video.currentTime = seekToTime;
+      });
+    }
+  </script>
 </body>
 </html>
