@@ -1,36 +1,280 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Custom Video Playback</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Video HLS Player</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .video-container {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        video {
+            width: 100%;
+            background-color: #000;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 8px 15px;
+            cursor: pointer;
+            min-width: 100px;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+        .playlist-info {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+        .current-segment {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e6f7ff;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .debug-info {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #fff8e6;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
 </head>
 <body>
-  <video id="video" controls width="640" height="360"></video>
+    <h1>Multi-Video HLS Player</h1>
+    
+    <div class="video-container">
+        <video id="video" controls></video>
+    </div>
+    
+    <div class="controls">
+        <button id="playBtn">Play</button>
+        <button id="pauseBtn">Pause</button>
+        <button id="fullscreenBtn">Fullscreen</button>
+        <button id="refreshBtn">Refresh Playlist</button>
+    </div>
+    
+    <div class="current-segment" id="currentSegment">
+        Current segment: None
+    </div>
+    
+    <div class="status" id="status">
+        Initializing player...
+    </div>
+    
+    <div class="debug-info" id="debugInfo">
+        Debug information will appear here
+    </div>
+    
+    <div class="playlist-info">
+        <h3>Current Playlist Segments</h3>
+        <div id="playlistContent"></div>
+    </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <script>
-    const video = document.getElementById('video');
-    const hls = new Hls();
-
-    // ✅ Use your FastAPI endpoint that returns the custom playlist
-    const playlistUrl = "http://localhost:8000/stream/custom-playlist";
-    const seekToTime = 6; // For example, user wants to start at 6 seconds
-
-    if (Hls.isSupported()) {
-      hls.loadSource(playlistUrl);
-      hls.attachMedia(video);
-
-      hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        video.play();
-        video.oncanplay = function () {
-          video.currentTime = seekToTime; // Seek to exact timestamp
-        };
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = playlistUrl;
-      video.addEventListener('loadedmetadata', function () {
-        video.currentTime = seekToTime;
-      });
-    }
-  </script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const video = document.getElementById('video');
+            const playBtn = document.getElementById('playBtn');
+            const pauseBtn = document.getElementById('pauseBtn');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            const refreshBtn = document.getElementById('refreshBtn');
+            const statusDiv = document.getElementById('status');
+            const playlistContent = document.getElementById('playlistContent');
+            const currentSegmentDiv = document.getElementById('currentSegment');
+            const debugInfoDiv = document.getElementById('debugInfo');
+            
+            let hls = null;
+            const playlistUrl = 'http://localhost:8000/stream/custom-playlist';
+            let currentPlaylistText = '';
+            
+            // Initialize player with optimal settings for multi-video playlist
+            function initPlayer() {
+                if (hls) {
+                    hls.destroy();
+                }
+                
+                if (Hls.isSupported()) {
+                    hls = new Hls({
+                        enableWorker: true,
+                        lowLatencyMode: false,
+                        maxBufferLength: 30,
+                        maxMaxBufferLength: 60,
+                        maxBufferSize: 60 * 1000 * 1000, // 60MB
+                        maxBufferHole: 0.5,
+                        maxFragLookUpTolerance: 0.25,
+                        stretchShortVideoTrack: true,
+                        abrEwmaDefaultEstimate: 500000, // 500kbps
+                        abrBandWidthFactor: 0.8,
+                        abrBandWidthUpFactor: 0.7,
+                        startLevel: -1,
+                        fragLoadingTimeOut: 10000,
+                        manifestLoadingTimeOut: 10000,
+                        levelLoadingTimeOut: 10000
+                    });
+                    
+                    loadPlaylist();
+                    hls.attachMedia(video);
+                    
+                    hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
+                        statusDiv.textContent = 'Playlist loaded successfully';
+                        updatePlaylistDisplay(data.levels);
+                        
+                        // Auto-start playback if paused
+                        if (video.paused) {
+                            video.play().catch(e => {
+                                statusDiv.textContent = 'Autoplay blocked: ' + e.message;
+                            });
+                        }
+                    });
+                    
+                    hls.on(Hls.Events.ERROR, function(event, data) {
+                        logDebug('HLS Error: ' + JSON.stringify(data));
+                        
+                        if (data.fatal) {
+                            switch(data.type) {
+                                case Hls.ErrorTypes.NETWORK_ERROR:
+                                    statusDiv.textContent = 'Network error - trying to recover';
+                                    hls.startLoad();
+                                    break;
+                                case Hls.ErrorTypes.MEDIA_ERROR:
+                                    statusDiv.textContent = 'Media error - trying to recover';
+                                    hls.recoverMediaError();
+                                    break;
+                                default:
+                                    statusDiv.textContent = 'Fatal error - reloading player';
+                                    setTimeout(initPlayer, 2000);
+                                    break;
+                            }
+                        }
+                    });
+                    
+                    hls.on(Hls.Events.FRAG_CHANGED, function(event, data) {
+                        const frag = data.frag;
+                        currentSegmentDiv.textContent = `Current segment: ${frag.url} (${frag.type}, ${frag.duration.toFixed(2)}s)`;
+                    });
+                    
+                    hls.on(Hls.Events.FRAG_LOADING, function(event, data) {
+                        logDebug(`Loading fragment: ${data.frag.url}`);
+                    });
+                    
+                    hls.on(Hls.Events.FRAG_LOADED, function(event, data) {
+                        logDebug(`Loaded fragment: ${data.frag.url} (${(data.stats.loaded / 1000).toFixed(1)}KB)`);
+                    });
+                    
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    // Safari native HLS
+                    video.src = playlistUrl;
+                    video.addEventListener('loadedmetadata', function() {
+                        statusDiv.textContent = 'Using native HLS support';
+                        fetchPlaylistForDisplay();
+                    });
+                } else {
+                    statusDiv.textContent = 'HLS is not supported in this browser';
+                }
+            }
+            
+            function loadPlaylist() {
+                if (hls) {
+                    // Add cache-buster to ensure fresh playlist
+                    const url = playlistUrl + '?_=' + Date.now();
+                    statusDiv.textContent = 'Loading playlist...';
+                    hls.loadSource(url);
+                    
+                    // Force start loading after short delay
+                    setTimeout(() => {
+                        if (hls) {
+                            hls.startLoad();
+                            logDebug('Started loading media segments');
+                        }
+                    }, 100);
+                }
+            }
+            
+            function updatePlaylistDisplay(levels) {
+                fetchPlaylistForDisplay();
+                
+                if (levels && levels.length > 0) {
+                    logDebug(`Found ${levels.length} quality levels`);
+                    levels.forEach((level, index) => {
+                        logDebug(`Level ${index}: ${level.width}x${level.height} @ ${level.bitrate}bps`);
+                    });
+                }
+            }
+            
+            function fetchPlaylistForDisplay() {
+                fetch(playlistUrl + '?_=' + Date.now())
+                    .then(response => response.text())
+                    .then(data => {
+                        currentPlaylistText = data;
+                        playlistContent.innerHTML = `<pre>${data}</pre>`;
+                    })
+                    .catch(error => {
+                        playlistContent.textContent = 'Error loading playlist: ' + error.message;
+                    });
+            }
+            
+            function logDebug(message) {
+                const timestamp = new Date().toISOString().substr(11, 12);
+                debugInfoDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+                debugInfoDiv.scrollTop = debugInfoDiv.scrollHeight;
+            }
+            
+            // Event listeners for controls
+            playBtn.addEventListener('click', function() {
+                video.play();
+                statusDiv.textContent = 'Playing...';
+            });
+            
+            pauseBtn.addEventListener('click', function() {
+                video.pause();
+                statusDiv.textContent = 'Paused';
+            });
+            
+            fullscreenBtn.addEventListener('click', function() {
+                if (video.requestFullscreen) {
+                    video.requestFullscreen();
+                } else if (video.webkitRequestFullscreen) {
+                    video.webkitRequestFullscreen();
+                } else if (video.msRequestFullscreen) {
+                    video.msRequestFullscreen();
+                }
+            });
+            
+            refreshBtn.addEventListener('click', function() {
+                statusDiv.textContent = 'Refreshing playlist...';
+                if (hls) {
+                    loadPlaylist();
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    video.src = playlistUrl + '?_=' + Date.now();
+                    fetchPlaylistForDisplay();
+                }
+            });
+            
+            // Initialize the player
+            initPlayer();
+        });
+    </script>
 </body>
 </html>
