@@ -1,14 +1,13 @@
 from fastapi import FastAPI
 import redis.asyncio as redis
-from bullmq import Worker
 from dataclasses import dataclass
 from typing import Dict, List
 import logging
 import threading
 from datetime import datetime
 import asyncio
-from videostream import router  # Import routes from routes.py
-from videostream2 import vd_router  # Import routes from routes.py
+# from videostream import router  # Import routes from routes.py
+# from videostream2 import vd_router  # Import routes from routes.py
 from fastapi.staticfiles import StaticFiles
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,11 +17,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
-app.include_router(router)
-app.include_router(vd_router)
-app.mount("/trimmed", StaticFiles(directory="trimmed"), name="trimmed")
-app.mount("/hls", StaticFiles(directory="hls"), name="hls")
-app.mount("/temp", StaticFiles(directory="temp"), name="temp")
+# app.include_router(router)
+# app.include_router(vd_router)
+# app.mount("/trimmed", StaticFiles(directory="trimmed"), name="trimmed")
+# app.mount("/hls", StaticFiles(directory="hls"), name="hls")
+# app.mount("/temp", StaticFiles(directory="temp"), name="temp")
 
 app.add_middleware(
     CORSMiddleware,
@@ -197,28 +196,32 @@ async def process_change(job, jobid):
         return {"changeId": change_id, "error": str(e)}
 
 # Function to start the BullMQ worker
-def start_worker():
-    # Create a new event loop for the worker thread
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+# def start_worker():
+#     # Create a new event loop for the worker thread
+#     loop = asyncio.new_event_loop()
+#     asyncio.set_event_loop(loop)
 
-    # Initialize the BullMQ worker
-    worker = Worker('video-changes', process_change, {'connection': redis_client})
+#     # Initialize the BullMQ worker
+#     worker = Worker('video-changes', process_change, {'connection': redis_client})
 
-    # Log that the worker has started
-    logger.info("BullMQ worker started")
+#     # Log that the worker has started
+#     logger.info("BullMQ worker started")
 
-    # Run the event loop
-    loop.run_forever()
+#     # Run the event loop
+#     loop.run_forever()
 
-# Start the BullMQ worker in a separate thread
-worker_thread = threading.Thread(target=start_worker)
-worker_thread.daemon = True  # Daemonize thread to stop it when the main program exits
-worker_thread.start()
+# # Start the BullMQ worker in a separate thread
+# worker_thread = threading.Thread(target=start_worker)
+# worker_thread.daemon = True  # Daemonize thread to stop it when the main program exits
+# worker_thread.start()
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+@app.get("/testing")
+async def test():
+    return{"status": "hello"}
 
 if __name__ == "__main__":
     import uvicorn

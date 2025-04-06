@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7.0-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis_data:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+    environment:
+      - REDIS_PASSWORD=mysecurepassword
+    
+  localstack:
+    image:  localstack/localstack
+    hostname: localstack
+    ports:
+      - "4566:4566" 
+    environment:
+      - SERVICES=s3,sqs
+      - DEBUG=1
+      - LOCALSTACK_INIT_SCRIPTS_PATH=/docker-entrypoint-initaws.d
+      - DOCKER_HOST=unix:///var/run/docker.sock  # Fix for Docker connection errors
+    volumes:
+      - ./init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh
+      - ./cors.json:/etc/localstack/init/cors.json
+      - /var/run/docker.sock:/var/run/docker.sock  # Needed for some LocalStack features
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      
+  api:
+    build: ./api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api/app:/app
+    #   - ./api/app/trimmed:/app/trimmed
+    #   - ./api/app/hls:/app/hls
+    #   - ./api/app/temp:/app/temp
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=mysecurepassword
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    depends_on:
+      - redis
+      - localstack
+
+
+  worker:
+    build: ./worker
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_REGION=us-east-1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=mysecurepassword
+    volumes:
+      - shared_volume:/shared
+      - ./worker/app:/app/app  # Host path → Container path
+
+      # - ./api/app/trimmed:/app/trimmed  # Access to output dirs
+      # - ./api/app/hls:/app/hls
+    depends_on:
+      - redis
+      - localstack
+
+volumes:
+  redis_data:
+  localstack_data:
+  shared_volume:

@@ -1,0 +1,24 @@
+boto3==1.24.28
+botocore==1.27.28
+redis==5.0.0
+python-dotenv==1.0.0
+sh==1.14.3
+# Video processing
+ffmpeg-python==0.2.0
+pydub==0.25.1
+moviepy==1.0.3
+
+# Utilities
+requests==2.31.0
+python-magic==0.4.27
+filetype==1.2.0
+tqdm==4.66.1
+# Async
+asyncio==3.4.3
+aiofiles==23.2.1
+
+# Retry
+tenacity==8.2.3
+
+# Monitoring
+prometheus-client==0.17.1
