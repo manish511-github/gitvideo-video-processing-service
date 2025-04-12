@@ -3,6 +3,7 @@ botocore==1.27.28
 redis==5.0.0
 python-dotenv==1.0.0
 sh==1.14.3
+kafka-python
 # Video processing
 ffmpeg-python==0.2.0
 pydub==0.25.1
