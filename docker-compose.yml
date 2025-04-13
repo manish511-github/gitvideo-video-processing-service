@@ -11,13 +11,15 @@ services:
       - redis_data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
     environment:
-      - REDIS_PASSWORD="mysecurepassword"
-    
+      - REDIS_PASSWORD=mysecurepassword
+    networks:
+      - app_network
+
   localstack:
     image: localstack/localstack
     hostname: localstack
     ports:
-      - "4566:4566" 
+      - "4566:4566"
     environment:
       - SERVICES=s3,sqs
       - DEBUG=1
@@ -32,7 +34,9 @@ services:
       interval: 5s
       timeout: 10s
       retries: 20
-      
+    networks:
+      - app_network
+
   api:
     build: ./api
     ports:
@@ -46,20 +50,26 @@ services:
       - AWS_ENDPOINT_URL=http://localstack:4566
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
       - redis
       - localstack
+      - kafka
+    networks:
+      - app_network
 
   websocket-server:
     build: ./websocket
     ports:
-      - "8001:8001"  # Host:Container
+      - "8001:8001"
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=mysecurepassword
     depends_on:
       - redis
+    networks:
+      - app_network
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -68,22 +78,35 @@ services:
       - ZOOKEEPER_CLIENT_PORT=2181
       - ZOOKEEPER_TICK_TIME=2000
     ports:
-      - "12181:2181"
+      - "2181:2181"
+    networks:
+      - app_network
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
     container_name: kafka
     ports:
-      - "19092:9092"
+      - "9092:9092"  # Internal listener
+      - "9093:9093"  # External listener
     environment:
       - KAFKA_BROKER_ID=1
       - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:19092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9093
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
       - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
       - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
     depends_on:
       - zookeeper
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--list", "--bootstrap-server", "kafka:9092"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    networks:
+      - app_network
 
   worker:
     build: ./worker
@@ -93,6 +116,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-east-1
       - AWS_REGION=us-east-1
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/processing-queue
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=mysecurepassword
@@ -101,11 +125,21 @@ services:
       - shared_volume:/shared
       - ./worker/app:/app/app
     depends_on:
-      - redis
-      - localstack
-      - kafka
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      localstack:
+        condition: service_healthy
+    networks:
+      - app_network
 
 volumes:
   redis_data:
   localstack_data:
   shared_volume:
+
+networks:
+  app_network:
+    driver: bridge
+    name: app_network

@@ -18,15 +18,15 @@ echo "Creating S3 buckets..."
 awslocal s3 mb s3://video-raw || true
 awslocal s3 mb s3://video-processed || true
 
-echo "Configuring S3 notifications..."
-awslocal s3api put-bucket-notification-configuration \
-  --bucket video-raw \
-  --notification-configuration '{
-    "QueueConfigurations": [{
-      "QueueArn": "arn:aws:sqs:us-east-1:000000000000:processing-queue",
-      "Events": ["s3:ObjectCreated:*"]
-    }]
-  }'
+# echo "Configuring S3 notifications..."
+# awslocal s3api put-bucket-notification-configuration \
+#   --bucket video-raw \
+#   --notification-configuration '{
+#     "QueueConfigurations": [{
+#       "QueueArn": "arn:aws:sqs:us-east-1:000000000000:processing-queue",
+#       "Events": ["s3:ObjectCreated:*"]
+#     }]
+#   }'
 
 echo "Verification:"
 awslocal sqs list-queues
