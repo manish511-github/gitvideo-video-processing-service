@@ -1,0 +1,5 @@
+confluent-kafka==2.2.0
+boto3==1.28.62
+redis==4.6.0
+python-dotenv==1.0.0
+watchdog

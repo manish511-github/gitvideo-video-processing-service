@@ -81,6 +81,7 @@ services:
       - "2181:2181"
     networks:
       - app_network
+    
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -133,6 +134,30 @@ services:
         condition: service_healthy
     networks:
       - app_network
+  metadata-service:
+    build: ./metadata-service
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_METADATA_TOPIC=video.metadata.requests
+      - KAFKA_RESULT_TOPIC=video.metadata.results
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=mysecurepassword
+    volumes:
+      - shared_volume:/shared
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      localstack:
+        condition: service_healthy
+    networks:
+      - app_network
+
 
 volumes:
   redis_data:

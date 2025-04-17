@@ -44,5 +44,16 @@ awslocal s3api put-bucket-cors --bucket video-raw --cors-configuration '{
     }
   ]
 }'
+awslocal s3api put-bucket-cors --bucket video-processed --cors-configuration '{
+  "CORSRules":[
+    {
+      "AllowedHeaders":["*"],
+      "AllowedMethods":["GET","PUT","POST","DELETE","HEAD"],
+      "AllowedOrigins":["*"],
+      "ExposeHeaders":["ETag"],
+      "MaxAgeSeconds":3000
+    }
+  ]
+}'
 
 echo "INIT COMPLETE"
